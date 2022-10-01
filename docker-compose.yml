@@ -1,0 +1,72 @@
+# Use root/example as user/password credentials
+version: '3'
+
+services:
+  db:
+    image: mysql:5
+    # restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: forex
+      MYSQL_DATABASE: forex
+      MYSQL_USER: forex
+      MYSQL_PASSWORD: forex
+    ports:
+      - 3306:3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  currency-service:
+    image: quarkus/currency-service-jvm:latest
+    build: 
+      context: currency-service
+      dockerfile: src/main/docker/Dockerfile.jvm
+    deploy:
+      replicas: 1
+    depends_on:
+      - db
+      - consul
+    # links:
+    #   - "db:db"
+    environment:
+      quarkus.log.level: TRACE
+
+  currency-conversion:
+    image: quarkus/currency-conversion-jvm:latest
+    build:
+      context: currency-conversion
+      dockerfile: src/main/docker/Dockerfile.jvm
+    deploy:
+      replicas: 1
+    depends_on:
+      - db
+      - currency-service
+      - consul
+    environment:
+      quarkus.log.level: TRACE
+
+  currency-api:
+    image: quarkus/currency-api-jvm:latest
+    build:
+      context: currency-api
+      dockerfile: src/main/docker/Dockerfile.jvm
+    deploy:
+      replicas: 1
+    depends_on:
+      - currency-conversion
+      - consul
+      - db
+    environment:
+      quarkus.log.level: TRACE
+    ports:
+      - 8080:8080
+
+  consul:
+    image: consul:1.7
+    command: agent -dev -ui -client=0.0.0.0 -bind=0.0.0.0 --https-port=8501
+    ports:
+      - 8500:8500
+      - 8501:8501
+      - 8002:8002
+
+volumes:
+  mysql-data:
